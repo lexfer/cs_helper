@@ -14,6 +14,10 @@
 #include <signal.h>
 #include <poll.h>
 
+//server query string
+#define A2S_INFO "\xFF\xFF\xFF\xFF\x54Source Engine Query" 
+#define A2S_INFO_LENGTH 25
+
 #define MAXLEN 1024
 #define TIMEOUT 2
 
@@ -23,14 +27,16 @@ int socket(int domain, int type, int protocol);
 const unsigned char  cli_query[] = {0xff, 0xff, 0xff, 0xff, 0x54};
 const int cmp_query_size = sizeof(cli_query); //in client query size
 //server query string
+/*
 const unsigned char  srv_query[] = 
 				{ 
 				0xff,0xff,0xff,0xff,0x54,0x53,0x6f,0x75,0x72,
 				0x63,0x65,0x20,0x45,0x6e,0x67,0x69,0x6e,0x65,
 				0x20,0x51,0x75,0x65,0x72,0x79,0x00
 				};
-const int srv_query_size = sizeof(srv_query); //out server query size
 
+const int srv_query_size = sizeof(srv_query); //out server query size
+*/
 int sock;
 int sock_query;
 unsigned char buffer[MAXLEN]; 	
@@ -90,10 +96,10 @@ int main(int argc, char *argv[])
 		if ( ret == -1 ){
 			perror("poll error");
         	return 1;
-    	}
+		}
 		//TIMEOUT (query server if not receive any data)
 		if (!ret){
-			n = sendto(sock_query, (unsigned char *) srv_query, srv_query_size, 
+			n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
 				MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
 		}
 		if ( fds[0].revents & POLLIN ){ 	//client query
@@ -102,7 +108,7 @@ int main(int argc, char *argv[])
 			if (memcmp(cli_query, buffer, cmp_query_size) == 0){ //check client query
 			  printf("receive byte:%d, from client ip: %s:%d\n ", 
 					n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
-				n = sendto(sock,(unsigned char *) srv_buffer, srv_query_size, 
+				n = sendto(sock,(unsigned char *) srv_buffer, sizeof(srv_buffer), 
 					MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
 			}
 		}
