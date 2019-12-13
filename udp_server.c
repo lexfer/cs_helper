@@ -1,49 +1,53 @@
 #include <stdio.h>
-#include <ctype.h>
 #include <unistd.h>
-#include <sys/types.h>
+#include <string.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <stdlib.h>
-#include <string.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sys/time.h>
-#include <time.h>
-#include <sys/time.h>
-#include <signal.h>
 #include <poll.h>
 
 //server query string
 #define A2S_INFO "\xFF\xFF\xFF\xFF\x54Source Engine Query" 
 #define A2S_INFO_LENGTH 25
+//query from client string
+#define A2S_QUERY "\xFF\xFF\xFF\xFF\x54" 
+#define A2S_QUERY_LENGTH 5
 
 #define MAXLEN 1024
 #define TIMEOUT 2
 
-int socket(int domain, int type, int protocol);
+typedef struct {
+	char version;
+	char hostname[256];
+	char map[32];
+	char game_directory[32];
+	char game_description[256];
+	short app_id;
+	char num_players ;
+	char max_players;
+	char num_of_bots;
+	char dedicated;
+	char os;
+	char password;
+	char secure;
+	char game_version[32];
+} SSQ_INFO_REPLY;
 
-//client query string
-const unsigned char  cli_query[] = {0xff, 0xff, 0xff, 0xff, 0x54};
-const int cmp_query_size = sizeof(cli_query); //in client query size
-//server query string
-/*
-const unsigned char  srv_query[] = 
-				{ 
-				0xff,0xff,0xff,0xff,0x54,0x53,0x6f,0x75,0x72,
-				0x63,0x65,0x20,0x45,0x6e,0x67,0x69,0x6e,0x65,
-				0x20,0x51,0x75,0x65,0x72,0x79,0x00
-				};
-
-const int srv_query_size = sizeof(srv_query); //out server query size
-*/
-int sock;
-int sock_query;
 unsigned char buffer[MAXLEN]; 	
 struct sockaddr_in addr, srv_addr, cli_addr;
 
-int main(int argc, char *argv[])
-{
+int Socket(int domain, int type, int proto) {
+    int desk = socket(domain, type, proto);
+    if (desk <= 0) {
+        perror("Socket error");
+        exit(EXIT_FAILURE);
+    }
+    return desk;
+}
+
+void GetParam(int argc, char **argv) {
+	printf("%ld\n", sizeof(SSQ_INFO_REPLY));
 	if (argc != 3) {
 		fprintf(stderr, "%s <server-address> <port>\n", argv[0]);
 		exit(EXIT_FAILURE);
@@ -57,19 +61,16 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	srv_addr.sin_port = htons(atoi(argv[2]));
-
-	// Creating client bind socket file descriptor 
-	if ( (sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
-		perror("Socket creation failed"); 
-		exit(EXIT_FAILURE); 
-   }
-	// Creating  server socket file descriptor for query  
-	if ( (sock_query = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) { 
-		perror("Socket creation failed"); 
-		exit(EXIT_FAILURE); 
-   }
-	
 	srv_addr.sin_family = AF_INET;
+} 
+
+int main(int argc, char *argv[])
+{
+	GetParam(argc, argv);
+
+	int sock, sock_query;
+	sock = Socket(AF_INET,SOCK_DGRAM,0);
+	sock_query = Socket(AF_INET,SOCK_DGRAM,0);
 	
 	//Program socket ip addr (bind addr) 
 	addr.sin_family = AF_INET;
@@ -87,7 +88,7 @@ int main(int argc, char *argv[])
 	fds[1].fd = sock_query; //server socket
 	fds[1].events = POLLIN;
 
-	int len, n, ret, addrlen; 
+	int len, n, ret; 
 	unsigned char srv_buffer[MAXLEN]; 	
 		
 	while(1)
@@ -105,7 +106,8 @@ int main(int argc, char *argv[])
 		if ( fds[0].revents & POLLIN ){ 	//client query
 			n = recvfrom(sock, (unsigned char *)buffer, MAXLEN,  
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
-			if (memcmp(cli_query, buffer, cmp_query_size) == 0){ //check client query
+			if (memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH) == 0)
+			{
 			  printf("receive byte:%d, from client ip: %s:%d\n ", 
 					n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 				n = sendto(sock,(unsigned char *) srv_buffer, sizeof(srv_buffer), 
