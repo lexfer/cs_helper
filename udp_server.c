@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 	fds[1].events = POLLIN;
 
 	int len, n, ret, addrlen; 
-	unsigned char srv_buffer[MAXLEN]; 	
+	unsigned char srv_buffer[MAXLEN]; //save server answer	
 		
 	while(1)
 	{
