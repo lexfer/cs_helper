@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 
 	int len, n, ret; 
 	unsigned char srv_buffer[MAXLEN]; 	
-		
+	
 	while(1)
 	{
 		ret = poll(fds, 2, TIMEOUT * 1000);
