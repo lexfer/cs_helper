@@ -13,10 +13,12 @@
 //query from client string
 #define A2S_QUERY "\xFF\xFF\xFF\xFF\x54" 
 #define A2S_QUERY_LENGTH 5
+#define SERVER_ANSWER "\xFF\xFF\xFF\xFF\x49" 
+#define SERVER_TEMPLATE_LEN 5
 
 #define MAXLEN 1024
 #define TIMEOUT 2
-
+#define MINLEN 64
 typedef struct {
 	char version;
 	char hostname[256];
@@ -32,7 +34,7 @@ typedef struct {
 	char password;
 	char secure;
 	char game_version[32];
-} SSQ_INFO_REPLY;
+} A2S_INFO_REPLY;
 
 unsigned char buffer[MAXLEN]; 	
 struct sockaddr_in addr, srv_addr, cli_addr;
@@ -47,7 +49,7 @@ int Socket(int domain, int type, int proto) {
 }
 
 void GetParam(int argc, char **argv) {
-	printf("%ld\n", sizeof(SSQ_INFO_REPLY));
+	printf("%ld\n", sizeof(A2S_INFO_REPLY));
 	if (argc != 3) {
 		fprintf(stderr, "%s <server-address> <port>\n", argv[0]);
 		exit(EXIT_FAILURE);
@@ -88,8 +90,9 @@ int main(int argc, char *argv[])
 	fds[1].fd = sock_query; //server socket
 	fds[1].events = POLLIN;
 
-	int len, n, ret; 
+	int len, n, ret, ans_len = 0; 
 	unsigned char srv_buffer[MAXLEN]; 	
+	unsigned char answer[MAXLEN]; 	
 	
 	while(1)
 	{
@@ -108,21 +111,25 @@ int main(int argc, char *argv[])
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			if (memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH) == 0)
 			{
-			  printf("receive byte:%d, from client ip: %s:%d\n ", 
-					n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
-				n = sendto(sock,(unsigned char *) srv_buffer, sizeof(srv_buffer), 
-					MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
+			  //printf("receive byte:%d, from client ip: %s:%d\n ", 
+			//		n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+				if (ans_len){
+					n = sendto(sock,(unsigned char *) answer, ans_len, 
+						MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
+				}
 			}
 		}
 		if ( fds[1].revents & POLLIN ){ 	//server answer, get new data 
 			n = recvfrom(sock_query, (unsigned char *) srv_buffer, MAXLEN, 
-        	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);			
+        	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);	
+			if (memcmp(SERVER_ANSWER, srv_buffer, SERVER_TEMPLATE_LEN) == 0){
+				ans_len = n;
+				printf("%s\n", "correct server answer"); 
+				memcpy(answer, srv_buffer, ans_len);
+			}
+			
 		}
-/*
- 		if (cli_addr.sin_addr.s_addr == srv_addr.sin_addr.s_addr){
-			printf("%s", "Get server response\n");
-		} 
-*/
+	
 	}
 	
 	close(sock);
