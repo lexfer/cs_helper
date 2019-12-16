@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -40,6 +41,7 @@ typedef struct {
 */
 unsigned char buffer[MAXLEN]; 	
 struct sockaddr_in addr, srv_addr, cli_addr;
+int sock, sock_query;
 
 int Socket(int domain, int type, int proto) {
     int desk = socket(domain, type, proto);
@@ -67,6 +69,14 @@ void GetParam(int argc, char **argv) {
 	srv_addr.sin_family = AF_INET;
 } 
 
+int SendToServer()
+{
+	int n;
+	n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
+					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
+	return n;
+}
+
 long mtime()
 {	
 	struct timeval tv;
@@ -79,7 +89,6 @@ int main(int argc, char *argv[])
 {
 	GetParam(argc, argv);
 
-	int sock, sock_query;
 	sock = Socket(AF_INET,SOCK_DGRAM,0);
 	sock_query = Socket(AF_INET,SOCK_DGRAM,0);
 	
@@ -102,22 +111,27 @@ int main(int argc, char *argv[])
 	int len, n, ret, ans_len = 0; 
 	unsigned char srv_buffer[MAXLEN]; 	
 	unsigned char answer[MAXLEN]; 	
-	long answer_time = mtime();
+	long cur_time 					= 0;
+	long next_request_time 		= 0;
+ 	long next_request_period = 2e6;
+
 	while(1)
 	{	
 		ret = poll(fds, 2, TIMEOUT * 1000);
-		if ( ret == -1 ){
+		if ( -1 == ret ){
 			perror("poll error");
         	return 1;
+		}
+		cur_time = mtime();
+		if(next_request_time < cur_time){
+			SendToServer();
+			next_request_time = cur_time + next_request_period;
+			printf("%ld\n", cur_time);
 		}
 		/*TIMEOUT (query server if not receive any data)
 		This block work when client not send query*/
 		if (!ret)
-			n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
-				MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
-		else if (answer_time - mtime() > TIMEOUT)
-			n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
-					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
+			SendToServer();
 		if ( fds[0].revents & POLLIN ){ 	//client query
 			n = recvfrom(sock, (unsigned char *)buffer, MAXLEN,  
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
@@ -135,12 +149,11 @@ int main(int argc, char *argv[])
 			n = recvfrom(sock_query, (unsigned char *) srv_buffer, MAXLEN, 
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			//Check server answer(first 5 bytes)	
-			if (memcmp(SERVER_ANSWER, srv_buffer, SERVER_TEMPLATE_LEN) == 0){
+			ret = memcmp(SERVER_ANSWER, srv_buffer, SERVER_TEMPLATE_LEN);
+			if (0 == ret){
 				ans_len = n;
 				printf("%s\n", "correct server answer"); 
 				memcpy(answer, srv_buffer, ans_len);
-				answer_time = mtime();
-				printf("%ld\n", answer_time);	
 			}
 		}
 		
