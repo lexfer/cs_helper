@@ -95,9 +95,9 @@ int main(int argc, char *argv[])
 
 	int len, n, ret; 
 	unsigned char buffer[MAXLEN]; 	
-	long cur_time              = 0;
-	long next_request_time     = 0;
- 	long next_request_period = 2e6;
+	long cur_time                  = 0;
+	long next_request_time         = 0;
+ 	long next_request_period = TIMEOUT;
 
 	while(1)
 	{	
@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 		if (!ret || next_request_time < cur_time)
 		{ 
 			n = sendto(srv_sock, A2S_INFO, A2S_INFO_LENGTH, 
-					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
+                    MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
 			next_request_time = cur_time + next_request_period;
 			printf("%ld\n", cur_time);
 		}
@@ -119,13 +119,13 @@ int main(int argc, char *argv[])
 		if ( fds[0].revents & POLLIN )
 		{ 	
 			n = recvfrom(cli_sock, (unsigned char *)buffer, MAXLEN,  
-        	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
+                      MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			ret = memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH);
 			if ( 0 == ret ) 
 			{
 				if (s2a.data_len){
 					n = sendto(cli_sock,(unsigned char *) s2a.info, s2a.data_len, 
-						MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
+                          MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
 				}
 			}
 		}
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 		if ( fds[1].revents & POLLIN )
 		{ 	 
 			n = recvfrom(srv_sock, (unsigned char *) buffer, MAXLEN, 
-        	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
+                      MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			//Check server answer(first 5 bytes)	
 			ret = memcmp(SERVER_ANSWER, buffer, SERVER_TEMPLATE_LEN);
 			if ( 0 == ret ) {
