@@ -44,7 +44,8 @@ struct sockaddr_in loc_addr;
 struct sockaddr_in srv_addr;
 struct sockaddr_in cli_addr;
 
-int sock, sock_query;
+int cli_sock; 
+int srv_sock;
 
 int Socket(int domain, int type, int proto) {
     int desk = socket(domain, type, proto);
@@ -75,7 +76,7 @@ void GetParam(int argc, char **argv) {
 int SendToServer()
 {
 	int n;
-	n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
+	n = sendto(srv_sock, A2S_INFO, A2S_INFO_LENGTH, 
 					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
 	return n;
 }
@@ -92,23 +93,23 @@ int main(int argc, char *argv[])
 {
 	GetParam(argc, argv);
 
-	sock = Socket(AF_INET,SOCK_DGRAM,0);
-	sock_query = Socket(AF_INET,SOCK_DGRAM,0);
+	cli_sock = Socket(AF_INET,SOCK_DGRAM,0);
+	srv_sock = Socket(AF_INET,SOCK_DGRAM,0);
 	
 	//Program socket ip addr (bind addr) 
 	loc_addr.sin_family = AF_INET;
 	loc_addr.sin_port = htons(34025);
 	loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	if ( bind(sock, (const struct sockaddr *)&loc_addr,sizeof(loc_addr)) < 0 ) 
+	if ( bind(cli_sock, (const struct sockaddr *)&loc_addr,sizeof(loc_addr)) < 0 ) 
 	{ 
 		perror("Bind failed"); 
 		exit(EXIT_FAILURE); 
 	}
 
 	struct pollfd fds[2];
-	fds[0].fd = sock;	//client socket
+	fds[0].fd = cli_sock;	
 	fds[0].events = POLLIN;
-	fds[1].fd = sock_query; //server socket
+	fds[1].fd = srv_sock; 
 	fds[1].events = POLLIN;
 
 	int len, n, ret, ans_len = 0; 
@@ -139,14 +140,14 @@ int main(int argc, char *argv[])
 
 		if ( fds[0].revents & POLLIN )
 		{ 	
-			n = recvfrom(sock, (unsigned char *)buffer, MAXLEN,  
+			n = recvfrom(cli_sock, (unsigned char *)buffer, MAXLEN,  
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			if (memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH) == 0)
 			{
 			  //printf("receive byte:%d, from client ip: %s:%d\n ", 
 			//		n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 				if (ans_len){
-					n = sendto(sock,(unsigned char *) answer, ans_len, 
+					n = sendto(cli_sock,(unsigned char *) answer, ans_len, 
 						MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
 				}
 			}
@@ -154,7 +155,7 @@ int main(int argc, char *argv[])
 
 		if ( fds[1].revents & POLLIN )
 		{ 	 
-			n = recvfrom(sock_query, (unsigned char *) srv_buffer, MAXLEN, 
+			n = recvfrom(srv_sock, (unsigned char *) srv_buffer, MAXLEN, 
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			//Check server answer(first 5 bytes)	
 			ret = memcmp(SERVER_ANSWER, srv_buffer, SERVER_TEMPLATE_LEN);
@@ -167,8 +168,8 @@ int main(int argc, char *argv[])
 		
 	}
 	
-	close(sock);
-	close(sock_query);
+	close(cli_sock);
+	close(srv_sock);
    
 	return 0;
 }
