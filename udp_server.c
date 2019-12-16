@@ -88,10 +88,10 @@ int main(int argc, char *argv[])
 	fds[1].fd = srv_sock; 
 	fds[1].events = POLLIN;
 	
-	struct srv_info {
+	struct srv_answer {
 		int data_len;
 		unsigned char info[MAXLEN];
-	} a2s;
+	} s2a = { 0 };
 
 	int len, n, ret; 
 	unsigned char buffer[MAXLEN]; 	
@@ -123,8 +123,8 @@ int main(int argc, char *argv[])
 			ret = memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH);
 			if ( 0 == ret ) 
 			{
-				if (a2s.data_len){
-					n = sendto(cli_sock,(unsigned char *) a2s.info, a2s.data_len, 
+				if (s2a.data_len){
+					n = sendto(cli_sock,(unsigned char *) s2a.info, s2a.data_len, 
 						MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
 				}
 			}
@@ -137,9 +137,9 @@ int main(int argc, char *argv[])
 			//Check server answer(first 5 bytes)	
 			ret = memcmp(SERVER_ANSWER, buffer, SERVER_TEMPLATE_LEN);
 			if ( 0 == ret ) {
-				a2s.data_len = n;
+				s2a.data_len = n;
 				printf("%s\n", "correct server answer"); 
-				memcpy(a2s.info, buffer, n);
+				memcpy(s2a.info, buffer, n);
 			}
 		}
 		
