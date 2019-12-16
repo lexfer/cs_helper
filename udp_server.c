@@ -123,16 +123,17 @@ int main(int argc, char *argv[])
         	return 1;
 		}
 		cur_time = mtime();
-		if(next_request_time < cur_time){
+		if(next_request_time < cur_time)
+		{
 			SendToServer();
 			next_request_time = cur_time + next_request_period;
 			printf("%ld\n", cur_time);
 		}
 		/*TIMEOUT (query server if not receive any data)
 		This block work when client not send query*/
-		if (!ret)
-			SendToServer();
-		if ( fds[0].revents & POLLIN ){ 	//client query
+		if (!ret) SendToServer();
+		if ( fds[0].revents & POLLIN )
+		{ 	
 			n = recvfrom(sock, (unsigned char *)buffer, MAXLEN,  
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			if (memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH) == 0)
@@ -145,7 +146,8 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
-		if ( fds[1].revents & POLLIN ){ 	//server answer, get new data 
+		if ( fds[1].revents & POLLIN )
+		{ 	 
 			n = recvfrom(sock_query, (unsigned char *) srv_buffer, MAXLEN, 
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			//Check server answer(first 5 bytes)	
