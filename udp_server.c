@@ -40,7 +40,10 @@ typedef struct {
 } A2S_INFO_REPLY;
 */
 unsigned char buffer[MAXLEN]; 	
-struct sockaddr_in addr, srv_addr, cli_addr;
+struct sockaddr_in loc_addr; 
+struct sockaddr_in srv_addr;
+struct sockaddr_in cli_addr;
+
 int sock, sock_query;
 
 int Socket(int domain, int type, int proto) {
@@ -93,15 +96,16 @@ int main(int argc, char *argv[])
 	sock_query = Socket(AF_INET,SOCK_DGRAM,0);
 	
 	//Program socket ip addr (bind addr) 
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(34025);
-	addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	if ( bind(sock, (const struct sockaddr *)&addr,sizeof(addr)) < 0 ) 
+	loc_addr.sin_family = AF_INET;
+	loc_addr.sin_port = htons(34025);
+	loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if ( bind(sock, (const struct sockaddr *)&loc_addr,
+										sizeof(loc_addr)) < 0 ) 
 	{ 
 		perror("Bind failed"); 
 		exit(EXIT_FAILURE); 
 	}
-	
+
 	struct pollfd fds[2];
 	fds[0].fd = sock;	//client socket
 	fds[0].events = POLLIN;
