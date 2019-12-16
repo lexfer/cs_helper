@@ -99,8 +99,7 @@ int main(int argc, char *argv[])
 	loc_addr.sin_family = AF_INET;
 	loc_addr.sin_port = htons(34025);
 	loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	if ( bind(sock, (const struct sockaddr *)&loc_addr,
-										sizeof(loc_addr)) < 0 ) 
+	if ( bind(sock, (const struct sockaddr *)&loc_addr,sizeof(loc_addr)) < 0 ) 
 	{ 
 		perror("Bind failed"); 
 		exit(EXIT_FAILURE); 
@@ -126,6 +125,7 @@ int main(int argc, char *argv[])
 			perror("poll error");
         	return 1;
 		}
+		
 		cur_time = mtime();
 		if(next_request_time < cur_time)
 		{
@@ -136,6 +136,7 @@ int main(int argc, char *argv[])
 		/*TIMEOUT (query server if not receive any data)
 		This block work when client not send query*/
 		if (!ret) SendToServer();
+
 		if ( fds[0].revents & POLLIN )
 		{ 	
 			n = recvfrom(sock, (unsigned char *)buffer, MAXLEN,  
@@ -150,13 +151,14 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
+
 		if ( fds[1].revents & POLLIN )
 		{ 	 
 			n = recvfrom(sock_query, (unsigned char *) srv_buffer, MAXLEN, 
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			//Check server answer(first 5 bytes)	
 			ret = memcmp(SERVER_ANSWER, srv_buffer, SERVER_TEMPLATE_LEN);
-			if (0 == ret){
+			if (0 == ret)	{
 				ans_len = n;
 				printf("%s\n", "correct server answer"); 
 				memcpy(answer, srv_buffer, ans_len);
