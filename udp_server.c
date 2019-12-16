@@ -111,8 +111,8 @@ int main(int argc, char *argv[])
 	int len, n, ret, ans_len = 0; 
 	unsigned char srv_buffer[MAXLEN]; 	
 	unsigned char answer[MAXLEN]; 	
-	long cur_time 					= 0;
-	long next_request_time 		= 0;
+	long cur_time = 0;
+	long next_request_time = 0;
  	long next_request_period = 2e6;
 
 	while(1)
