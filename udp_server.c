@@ -9,6 +9,7 @@
 #include <poll.h>
 #include <sys/time.h>
 
+#define SRV_PORT 34025
 //server query string
 #define A2S_INFO "\xFF\xFF\xFF\xFF\x54Source Engine Query" 
 #define A2S_INFO_LENGTH 25
@@ -21,25 +22,7 @@
 #define MAXLEN 1024
 #define TIMEOUT 2
 #define MINLEN 64
-/*
-typedef struct {
-	char version;
-	char hostname[256];
-	char map[32];
-	char game_directory[32];
-	char game_description[256];
-	short app_id;
-	char num_players ;
-	char max_players;
-	char num_of_bots;
-	char dedicated;
-	char os;
-	char password;
-	char secure;
-	char game_version[32];
-} A2S_INFO_REPLY;
-*/
-unsigned char buffer[MAXLEN]; 	
+
 struct sockaddr_in loc_addr; 
 struct sockaddr_in srv_addr;
 struct sockaddr_in cli_addr;
@@ -48,12 +31,12 @@ int cli_sock;
 int srv_sock;
 
 int Socket(int domain, int type, int proto) {
-    int desk = socket(domain, type, proto);
-    if (desk <= 0) {
+    int sock = socket(domain, type, proto);
+    if ( sock <= 0 ) {
         perror("Socket error");
         exit(EXIT_FAILURE);
     }
-    return desk;
+    return sock;
 }
 
 void GetParam(int argc, char **argv) {
@@ -73,14 +56,6 @@ void GetParam(int argc, char **argv) {
 	srv_addr.sin_family = AF_INET;
 } 
 
-int SendToServer()
-{
-	int n;
-	n = sendto(srv_sock, A2S_INFO, A2S_INFO_LENGTH, 
-					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
-	return n;
-}
-
 long mtime()
 {	
 	struct timeval tv;
@@ -96,10 +71,11 @@ int main(int argc, char *argv[])
 	cli_sock = Socket(AF_INET,SOCK_DGRAM,0);
 	srv_sock = Socket(AF_INET,SOCK_DGRAM,0);
 	
-	//Program socket ip addr (bind addr) 
 	loc_addr.sin_family = AF_INET;
-	loc_addr.sin_port = htons(34025);
+	loc_addr.sin_port = htons(SRV_PORT);
 	loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	//Program socket ip addr (bind addr) 
 	if ( bind(cli_sock, (const struct sockaddr *)&loc_addr,sizeof(loc_addr)) < 0 ) 
 	{ 
 		perror("Bind failed"); 
@@ -111,12 +87,16 @@ int main(int argc, char *argv[])
 	fds[0].events = POLLIN;
 	fds[1].fd = srv_sock; 
 	fds[1].events = POLLIN;
+	
+	struct srv_info {
+		int data_len;
+		unsigned char info[MAXLEN];
+	} a2s;
 
-	int len, n, ret, ans_len = 0; 
-	unsigned char srv_buffer[MAXLEN]; 	
-	unsigned char answer[MAXLEN]; 	
-	long cur_time = 0;
-	long next_request_time = 0;
+	int len, n, ret; 
+	unsigned char buffer[MAXLEN]; 	
+	long cur_time              = 0;
+	long next_request_time     = 0;
  	long next_request_period = 2e6;
 
 	while(1)
@@ -128,26 +108,23 @@ int main(int argc, char *argv[])
 		}
 		
 		cur_time = mtime();
-		if(next_request_time < cur_time)
-		{
-			SendToServer();
+		if (!ret || next_request_time < cur_time)
+		{ 
+			n = sendto(srv_sock, A2S_INFO, A2S_INFO_LENGTH, 
+					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
 			next_request_time = cur_time + next_request_period;
 			printf("%ld\n", cur_time);
 		}
-		/*TIMEOUT (query server if not receive any data)
-		This block work when client not send query*/
-		if (!ret) SendToServer();
-
+		
 		if ( fds[0].revents & POLLIN )
 		{ 	
 			n = recvfrom(cli_sock, (unsigned char *)buffer, MAXLEN,  
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
-			if (memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH) == 0)
+			ret = memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH);
+			if ( 0 == ret ) 
 			{
-			  //printf("receive byte:%d, from client ip: %s:%d\n ", 
-			//		n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
-				if (ans_len){
-					n = sendto(cli_sock,(unsigned char *) answer, ans_len, 
+				if (a2s.data_len){
+					n = sendto(cli_sock,(unsigned char *) a2s.info, a2s.data_len, 
 						MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
 				}
 			}
@@ -155,14 +132,14 @@ int main(int argc, char *argv[])
 
 		if ( fds[1].revents & POLLIN )
 		{ 	 
-			n = recvfrom(srv_sock, (unsigned char *) srv_buffer, MAXLEN, 
+			n = recvfrom(srv_sock, (unsigned char *) buffer, MAXLEN, 
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
 			//Check server answer(first 5 bytes)	
-			ret = memcmp(SERVER_ANSWER, srv_buffer, SERVER_TEMPLATE_LEN);
-			if (0 == ret)	{
-				ans_len = n;
+			ret = memcmp(SERVER_ANSWER, buffer, SERVER_TEMPLATE_LEN);
+			if ( 0 == ret ) {
+				a2s.data_len = n;
 				printf("%s\n", "correct server answer"); 
-				memcpy(answer, srv_buffer, ans_len);
+				memcpy(a2s.info, buffer, n);
 			}
 		}
 		
@@ -170,6 +147,26 @@ int main(int argc, char *argv[])
 	
 	close(cli_sock);
 	close(srv_sock);
-   
+//printf("receive byte:%d, from client ip: %s:%d\n ", 
+//		n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+/*
+typedef struct {
+	char version;
+	char hostname[256];
+	char map[32];
+	char game_directory[32];
+	char game_description[256];
+	short app_id;
+	char num_players ;
+	char max_players;
+	char num_of_bots;
+	char dedicated;
+	char os;
+	char password;
+	char secure;
+	char game_version[32];
+} A2S_INFO_REPLY;
+*/
+
 	return 0;
 }
