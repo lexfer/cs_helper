@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 	int len, n, ret, ans_len = 0; 
 	unsigned char srv_buffer[MAXLEN]; 	
 	unsigned char answer[MAXLEN]; 	
-	long answer_time;
+	long answer_time = mtime();
 	while(1)
 	{	
 		ret = poll(fds, 2, TIMEOUT * 1000);
@@ -112,14 +112,12 @@ int main(int argc, char *argv[])
 		}
 		/*TIMEOUT (query server if not receive any data)
 		This block work when client not send query*/
-		if (!ret){
+		if (!ret)
 			n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
 				MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
-		}
-		else if (answer_time - mtime() > TIMEOUT){
+		else if (answer_time - mtime() > TIMEOUT)
 			n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
 					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
-		}  
 		if ( fds[0].revents & POLLIN ){ 	//client query
 			n = recvfrom(sock, (unsigned char *)buffer, MAXLEN,  
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
