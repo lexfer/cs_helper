@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <poll.h>
+#include <sys/time.h>
 
 //server query string
 #define A2S_INFO "\xFF\xFF\xFF\xFF\x54Source Engine Query" 
@@ -19,6 +20,7 @@
 #define MAXLEN 1024
 #define TIMEOUT 2
 #define MINLEN 64
+/*
 typedef struct {
 	char version;
 	char hostname[256];
@@ -35,7 +37,7 @@ typedef struct {
 	char secure;
 	char game_version[32];
 } A2S_INFO_REPLY;
-
+*/
 unsigned char buffer[MAXLEN]; 	
 struct sockaddr_in addr, srv_addr, cli_addr;
 
@@ -49,7 +51,6 @@ int Socket(int domain, int type, int proto) {
 }
 
 void GetParam(int argc, char **argv) {
-	printf("%ld\n", sizeof(A2S_INFO_REPLY));
 	if (argc != 3) {
 		fprintf(stderr, "%s <server-address> <port>\n", argv[0]);
 		exit(EXIT_FAILURE);
@@ -65,6 +66,14 @@ void GetParam(int argc, char **argv) {
 	srv_addr.sin_port = htons(atoi(argv[2]));
 	srv_addr.sin_family = AF_INET;
 } 
+
+long mtime()
+{	
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	long mt = (long)tv.tv_sec;
+	return mt;
+}
 
 int main(int argc, char *argv[])
 {
@@ -93,19 +102,24 @@ int main(int argc, char *argv[])
 	int len, n, ret, ans_len = 0; 
 	unsigned char srv_buffer[MAXLEN]; 	
 	unsigned char answer[MAXLEN]; 	
-	
+	long answer_time;
 	while(1)
-	{
+	{	
 		ret = poll(fds, 2, TIMEOUT * 1000);
 		if ( ret == -1 ){
 			perror("poll error");
         	return 1;
 		}
-		//TIMEOUT (query server if not receive any data)
+		/*TIMEOUT (query server if not receive any data)
+		This block work when client not send query*/
 		if (!ret){
 			n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
 				MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
 		}
+		else if (answer_time - mtime() > TIMEOUT){
+			n = sendto(sock_query, A2S_INFO, A2S_INFO_LENGTH, 
+					MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
+		}  
 		if ( fds[0].revents & POLLIN ){ 	//client query
 			n = recvfrom(sock, (unsigned char *)buffer, MAXLEN,  
         	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
@@ -121,15 +135,17 @@ int main(int argc, char *argv[])
 		}
 		if ( fds[1].revents & POLLIN ){ 	//server answer, get new data 
 			n = recvfrom(sock_query, (unsigned char *) srv_buffer, MAXLEN, 
-        	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);	
+        	        MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
+			//Check server answer(first 5 bytes)	
 			if (memcmp(SERVER_ANSWER, srv_buffer, SERVER_TEMPLATE_LEN) == 0){
 				ans_len = n;
 				printf("%s\n", "correct server answer"); 
 				memcpy(answer, srv_buffer, ans_len);
+				answer_time = mtime();
+				printf("%ld\n", answer_time);	
 			}
-			
 		}
-	
+		
 	}
 	
 	close(sock);
