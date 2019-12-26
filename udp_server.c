@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -8,8 +7,10 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <sys/time.h>
+#include <getopt.h>
+#include <ctype.h>
 
-#define SRV_PORT 34025
+#define LOCAL_PORT 34025
 //server query string
 #define A2S_INFO "\xFF\xFF\xFF\xFF\x54Source Engine Query" 
 #define A2S_INFO_LENGTH 25
@@ -38,13 +39,81 @@ int Socket(int domain, int type, int proto) {
     }
     return sock;
 }
+int check_port(char *optarg) {
+	int pos = 0; 
+	int port;
+	while ( pos < strlen(optarg) )	{
+		if ( 0 == isdigit(optarg[pos]) ) {
+			fprintf(stderr, "Invalid port: %s\n", optarg);
+			exit(EXIT_FAILURE);
+		}
+		pos++;
+	}
+	port = atoi(optarg);
+	if ( port < 1 || port > 65535 ) {
+					fprintf(stderr, "Invalid port: %s\n", optarg);
+					exit(EXIT_FAILURE);
+				}
+	return port; 	
+}
+void Usage(void) {
+	fprintf(stderr, "Usage:  --bindip local_ip --bindport local_port --server server_ip --port server_ip\n");
+}
 
 void GetParam(int argc, char **argv) {
-	if (argc != 3) {
-		fprintf(stderr, "%s <server-address> <port>\n", argv[0]);
-		exit(EXIT_FAILURE);
+	int longIndex = 0, opt; 	
+	static const struct option longOpts[] = {
+    	{ "server",    required_argument, NULL, '1' },
+    	{ "port",      required_argument, NULL, '2' },
+    	{ "localip",   required_argument, NULL, '3' },
+    	{ "localport", required_argument, NULL, '4' },
+    	{ "help",      no_argument,       NULL, 'h' },
+	   	{ NULL,        no_argument,       NULL,  0  }
+	};
+	while ( (opt = getopt_long( argc, argv, "", longOpts, &longIndex ) ) != EOF ) {
+		switch (opt) {
+			case 'h': {
+				Usage();
+				break;
+			}
+			case '1': {
+				if ( 0 == inet_aton(optarg, &srv_addr.sin_addr) ) {
+					fprintf(stderr, "Invalid address, %s\n", optarg);
+					exit(EXIT_FAILURE);
+				}	
+				break;
+			}
+			case '2': {
+					srv_addr.sin_port = htons(check_port(optarg));
+				break;
+			}
+			case '3': {
+				if ( 0 == inet_aton(optarg, &loc_addr.sin_addr) ) {
+					fprintf(stderr, "Invalid address, %s\n", optarg);
+					exit(EXIT_FAILURE);
+				}	
+				break;
+			}
+			case '4': {
+				loc_addr.sin_port = htons(check_port(optarg));
+				break;
+			}	
+			case '?': {
+				Usage();
+				exit(EXIT_FAILURE);
+				break;
+			}
+			default: {
+				printf("unknown option\n");
+				exit(0);
+				break;
+			}
+		}
 	}
-	if (inet_aton(argv[1], &srv_addr.sin_addr) == 0) {
+}
+/*
+	
+	if (inet_aton(argv[2], &srv_addr.sin_addr) == 0) {
 		fprintf(stderr, "Invalid address\n");
 		exit(EXIT_FAILURE);
     }
@@ -54,28 +123,31 @@ void GetParam(int argc, char **argv) {
 	}
 	srv_addr.sin_port = htons(atoi(argv[2]));
 	srv_addr.sin_family = AF_INET;
-} 
+*/
 
 long mtime()
 {	
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	long mt = (long)tv.tv_sec;
+
 	return mt;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {	
+
+	loc_addr.sin_family      = AF_INET;
+	loc_addr.sin_port        = htons(LOCAL_PORT);
+	loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	
+	srv_addr.sin_family = AF_INET;
+	
 	GetParam(argc, argv);
 
 	cli_sock = Socket(AF_INET,SOCK_DGRAM,0);
 	srv_sock = Socket(AF_INET,SOCK_DGRAM,0);
 	
-	loc_addr.sin_family = AF_INET;
-	loc_addr.sin_port = htons(SRV_PORT);
-	loc_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	//Program socket ip addr (bind addr) 
+		//Program socket ip addr (bind addr) 
 	if ( bind(cli_sock, (const struct sockaddr *)&loc_addr,sizeof(loc_addr)) < 0 ) 
 	{ 
 		perror("Bind failed"); 
@@ -83,9 +155,9 @@ int main(int argc, char *argv[])
 	}
 
 	struct pollfd fds[2];
-	fds[0].fd = cli_sock;	
+	fds[0].fd     = cli_sock;	
 	fds[0].events = POLLIN;
-	fds[1].fd = srv_sock; 
+	fds[1].fd     = srv_sock; 
 	fds[1].events = POLLIN;
 	
 	struct srv_answer {
@@ -95,8 +167,8 @@ int main(int argc, char *argv[])
 
 	int len, n, ret; 
 	unsigned char buffer[MAXLEN]; 	
-	long cur_time                  = 0;
-	long next_request_time         = 0;
+	long cur_time            = 0;
+	long next_request_time   = 0;
  	long next_request_period = TIMEOUT;
 
 	while(1)
@@ -108,34 +180,35 @@ int main(int argc, char *argv[])
 		}
 		
 		cur_time = mtime();
-		if (!ret || next_request_time < cur_time)
+		if (!ret || next_request_time <= cur_time)
 		{ 
-			n = sendto(srv_sock, A2S_INFO, A2S_INFO_LENGTH, 
-                    MSG_DONTWAIT, (struct sockaddr *) &srv_addr, sizeof(srv_addr));
+			n = sendto( srv_sock, A2S_INFO, A2S_INFO_LENGTH, MSG_DONTWAIT, 
+						( struct sockaddr *) &srv_addr, sizeof(srv_addr) );
 			next_request_time = cur_time + next_request_period;
 			printf("%ld\n", cur_time);
 		}
 		
 		if ( fds[0].revents & POLLIN )
 		{ 	
-			n = recvfrom(cli_sock, (unsigned char *)buffer, MAXLEN,  
-                      MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
-			ret = memcmp(A2S_QUERY, buffer, A2S_QUERY_LENGTH);
+			n = recvfrom( cli_sock, (unsigned char *)buffer, MAXLEN,  
+						  MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len );
+		
+			ret = memcmp( A2S_QUERY, buffer, A2S_QUERY_LENGTH );
 			if ( 0 == ret ) 
 			{
-				if (s2a.data_len){
-					n = sendto(cli_sock,(unsigned char *) s2a.info, s2a.data_len, 
-                          MSG_DONTWAIT,(struct sockaddr *) &cli_addr, sizeof(cli_addr));
+				if (s2a.data_len) {
+					n = sendto( cli_sock, (unsigned char *) s2a.info, s2a.data_len, 
+                         		MSG_DONTWAIT, (struct sockaddr *) &cli_addr, sizeof(cli_addr) );
 				}
 			}
 		}
 
 		if ( fds[1].revents & POLLIN )
 		{ 	 
-			n = recvfrom(srv_sock, (unsigned char *) buffer, MAXLEN, 
-                      MSG_WAITALL, ( struct sockaddr *) &cli_addr, &len);
+			n = recvfrom( srv_sock, (unsigned char *) buffer, MAXLEN, MSG_WAITALL, 
+					      ( struct sockaddr *) &cli_addr, &len );
 			//Check server answer(first 5 bytes)	
-			ret = memcmp(SERVER_ANSWER, buffer, SERVER_TEMPLATE_LEN);
+			ret = memcmp( SERVER_ANSWER, buffer, SERVER_TEMPLATE_LEN );
 			if ( 0 == ret ) {
 				s2a.data_len = n;
 				printf("%s\n", "correct server answer"); 
@@ -147,6 +220,7 @@ int main(int argc, char *argv[])
 	
 	close(cli_sock);
 	close(srv_sock);
+
 //printf("receive byte:%d, from client ip: %s:%d\n ", 
 //		n, inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 /*
