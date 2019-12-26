@@ -53,7 +53,7 @@ int check_port(char *optarg) {
 	if ( port < 1 || port > 65535 ) {
 					fprintf(stderr, "Invalid port: %s\n", optarg);
 					exit(EXIT_FAILURE);
-				}
+	}
 	return port; 	
 }
 void Usage(void) {
@@ -111,19 +111,6 @@ void GetParam(int argc, char **argv) {
 		}
 	}
 }
-/*
-	
-	if (inet_aton(argv[2], &srv_addr.sin_addr) == 0) {
-		fprintf(stderr, "Invalid address\n");
-		exit(EXIT_FAILURE);
-    }
-	if (atoi(argv[2]) < 1 || atoi(argv[2]) > 65535) {
-		fprintf(stderr, "Invalid port\n");
-		exit(EXIT_FAILURE);
-	}
-	srv_addr.sin_port = htons(atoi(argv[2]));
-	srv_addr.sin_family = AF_INET;
-*/
 
 long mtime()
 {	
